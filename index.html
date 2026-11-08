@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chat with your PDF</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #fff;
+      --text: #1c1e26;
+      --muted: #6b7080;
+      --accent: #4f46e5;
+      --bot: #eef0f7;
+      --border: #e2e5ee
+    }
+
+    @media(prefers-color-scheme:dark) {
+      :root {
+        --bg: #12131a;
+        --card: #1b1d27;
+        --text: #eceef5;
+        --muted: #9096aa;
+        --accent: #7c75ff;
+        --bot: #262938;
+        --border: #2d3040
+      }
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 16px
+    }
+
+    .app {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 32px)
+    }
+
+    h1 {
+      font-size: 20px;
+      margin: 4px 0 12px
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px
+    }
+
+    #drop {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      color: var(--muted);
+      cursor: pointer
+    }
+
+    #drop:hover {
+      border-color: var(--accent)
+    }
+
+    #status {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 8px;
+      min-height: 18px
+    }
+
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      margin: 12px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px
+    }
+
+    .msg {
+      max-width: 85%;
+      padding: 10px 13px;
+      border-radius: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      font-size: 15px
+    }
+
+    .user {
+      align-self: flex-end;
+      background: var(--accent);
+      color: #fff
+    }
+
+    .bot {
+      align-self: flex-start;
+      background: var(--bot)
+    }
+
+    .src {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px
+    }
+
+    .row {
+      display: flex;
+      gap: 8px
+    }
+
+    input[type=text] {
+      flex: 1;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      font-size: 15px
+    }
+
+    button {
+      padding: 12px 18px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 15px;
+      cursor: pointer
+    }
+
+    button:disabled {
+      opacity: .5
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <h1>📄 Chat with your PDF</h1>
+    <div class="card">
+      <div id="drop">PDF yahan click karke upload karo (max 10MB)</div>
+      <input type="file" id="file" accept="application/pdf" hidden>
+      <div id="status"></div>
+    </div>
+    <div id="chat"></div>
+    <div class="row">
+      <input type="text" id="q" placeholder="PDF ke baare mein kuch bhi pucho..." disabled>
+      <button id="send" disabled>Send</button>
+    </div>
+  </div>
+  <script>
+    // ⚠️ Apna Render backend URL yahan daalo (bina end slash ke)
+    const API_URL = "http://127.0.0.1:8000";
+    let sid = null;
+    const $ = id => document.getElementById(id);
+    const add = (t, cls, src) => {
+      const d = document.createElement("div"); d.className = "msg " + cls; d.textContent = t;
+      if (src) { const s = document.createElement("span"); s.className = "src"; s.textContent = src; d.appendChild(s); }
+      $("chat").appendChild(d); $("chat").scrollTop = 1e9; return d;
+    };
+    $("drop").onclick = () => $("file").click();
+    $("file").onchange = async e => {
+      const f = e.target.files[0]; if (!f) return;
+      $("status").textContent = "Upload & processing... (pehli baar 30-60 sec lag sakte hain)";
+      const fd = new FormData(); fd.append("file", f);
+      try {
+        const r = await fetch(API_URL + "/upload", { method: "POST", body: fd });
+        const j = await r.json(); if (!r.ok) throw new Error(j.detail);
+        sid = j.session_id;
+        $("status").textContent = `✅ ${f.name} ready (${j.pages} pages)`;
+        $("q").disabled = $("send").disabled = false;
+        add("PDF process ho gayi! Ab sawaal pucho.", "bot");
+      } catch (err) { $("status").textContent = "❌ " + err.message; }
+    };
+    async function send() {
+      const q = $("q").value.trim(); if (!q || !sid) return;
+      $("q").value = ""; add(q, "user"); $("send").disabled = true;
+      const t = add("Soch raha hu...", "bot");
+      try {
+        const r = await fetch(API_URL + "/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: sid, question: q }) });
+        const j = await r.json(); if (!r.ok) throw new Error(j.detail);
+        t.textContent = j.answer;
+        const s = document.createElement("span"); s.className = "src"; s.textContent = "Pages: " + j.pages.join(", "); t.appendChild(s);
+      } catch (err) { t.textContent = "❌ " + err.message; }
+      $("send").disabled = false;
+    }
+    $("send").onclick = send;
+    $("q").onkeydown = e => { if (e.key === "Enter") send(); };
+  </script>
+</body>
+
+</html>
