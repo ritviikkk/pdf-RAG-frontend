@@ -176,7 +176,7 @@
     $("drop").onclick = () => $("file").click();
     $("file").onchange = async e => {
       const f = e.target.files[0]; if (!f) return;
-      $("status").textContent = "Upload & processing... (pehli baar 30-60 sec lag sakte hain)";
+      $("status").textContent = "Upload & Processing... (It takes around 30-60 sec)";
       const fd = new FormData(); fd.append("file", f);
       try {
         const r = await fetch(API_URL + "/upload", { method: "POST", body: fd });
@@ -184,7 +184,7 @@
         sid = j.session_id;
         $("status").textContent = `✅ ${f.name} ready (${j.pages} pages)`;
         $("q").disabled = $("send").disabled = false;
-        add("PDF process ho gayi! Ab sawaal pucho.", "bot");
+        add("Document analysis complete. Proceed with your inquiry.", "bot");
       } catch (err) { $("status").textContent = "❌ " + err.message; }
     };
     async function send() {
